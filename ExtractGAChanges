@@ -1,0 +1,27 @@
+from selenium import webdriver
+import json
+from time import sleep
+from urllib.parse import urlparse, parse_qs
+import pandas as pd
+# Capture network logs
+chrome_options = webdriver.ChromeOptions()
+chrome_options.set_capability(
+                        "goog:loggingPrefs", {"performance": "ALL", "browser": "ALL"}
+                    )
+driver = webdriver.Chrome(executable_path='/Users/kishansahu/Library/Python/3.9/bin/chromedriver',options=chrome_options)
+driver.get('https://www.pizzahut.co.in/')
+network_requests = driver.execute_script(
+            "return window.performance.getEntries();")
+for request in network_requests:
+        request_url = request['name']
+        if "https://analytics.google.com/g/collect?v=2" in request_url:
+            parsed_url = urlparse(request_url)          
+            # Get the query string parameters as a dictionary
+            query_params = parse_qs(parsed_url.query)
+            # Convert the dictionary to a Pandas DataFrame
+            df = pd.DataFrame(query_params)        
+            # Print the DataFrame
+            #print(df)
+            melted_df = pd.melt(df)
+            # # Display the melted DataFrame
+            print(melted_df)

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selenium Web Renderer</title>
+    <title>Run Python</title>
+</head>
+
+<body>
+    <h1>Selenium Web Renderer</h1>
+    <form action="/render" method="POST">
+        <label for="url">URL:</label>
+        <input type="text" name="url" id="url" required><br><br>
+        <label for="implementation_details">Implementation Details:</label>
+        <input type="text" name="implementation_details" id="implementation_details" required><br><br>
+        <label for="data_layer_name">DataLayer Name:</label>
+        <input type="text" name="data_layer_name" id="data_layer_name" required><br><br>
+        <button type="submit">Render Page</button>
+    </form>
+</body>
+
+</html>

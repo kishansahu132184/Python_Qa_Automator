@@ -1,0 +1,9 @@
+Flask
+pandas
+selenium
+webdriver_manager
+validators
+gunicorn
+numpy
+openpyxl
+chromedriver

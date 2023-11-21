@@ -1,0 +1,10 @@
+{
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.python"
+    },
+    "python.formatting.provider": "none",
+    "window.autoDetectColorScheme": false,
+    "workbench.colorTheme": "Kimbie Dark",
+    "appService.defaultWebAppToDeploy": "None",
+    "appService.deploySubpath": "."
+}
