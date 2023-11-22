@@ -28,17 +28,15 @@ app = Flask(__name__)
 chrome_options = webdriver.ChromeOptions()
 chrome_options.add_argument('--disable-extensions')
 chrome_options.add_argument('--disable-popup-blocking')
-chrome_options.add_argument('--headless')
+# chrome_options.add_argument('--headless')
 chrome_options.set_capability("goog:loggingPrefs", {"performance": "ALL", "browser": "ALL"})
 chrome_driver_path = "./chromedriver"
 
-# chrome_driver_path = '/path/to/chromedriver'
+
 chrome_service = webdriver.chrome.service.Service(chrome_driver_path)
 
-driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
-
-
-
+# driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
+driver = webdriver.Chrome(options=chrome_options)
 
 class WaitForBSSToAppear(object):
     def __init__(self):
@@ -60,6 +58,7 @@ class AADataExtraction:
     pagesFailed = []
     totalPages = []
     currentURL = ""
+    implementation_details = ""
 
     @app.route('/')
     def index():
@@ -67,9 +66,9 @@ class AADataExtraction:
 
     @app.route('/render', methods=['POST'])
     def getAAData():
-
+       
         url = request.form['url']
-        implementation_details = request.form['implementation_details']
+        AADataExtraction.implementation_details = request.form['implementation_details']
         data_layer_name = request.form['data_layer_name']
 
         if url != "":
@@ -80,22 +79,22 @@ class AADataExtraction:
                 print('Try again!')
                 # tkmb.showinfo(title="URL Validation",message="URL is correct")
             if req:
-                if implementation_details == "AA" or implementation_details == "GA" or implementation_details == "AEP":
+                if AADataExtraction.implementation_details == "AA" or AADataExtraction.implementation_details == "GA" or AADataExtraction.implementation_details == "AEP":
                     if data_layer_name != "":
-                        print("\nImplementation Details : ", implementation_details, "\n")
+                        print("\nImplementation Details : ", AADataExtraction.implementation_details, "\n")
                         driver.get(url)
                         input_link = driver.current_url
                         try:
-                            if implementation_details == "AA":
+                            if AADataExtraction.implementation_details == "AA":
                                 AADataExtraction.fetchAANetworkElements(input_link, AADataExtraction.pagesVisited)
-                            elif implementation_details == "AEP":
+                            elif AADataExtraction.implementation_details == "AEP":
                                 AADataExtraction.fetchAEPNetworkChanges(input_link, AADataExtraction.pagesVisited)
-                            elif implementation_details == "GA":
+                            elif AADataExtraction.implementation_details == "GA":
                                 AADataExtraction.fetchGANetworkChanges(input_link, AADataExtraction.pagesVisited)
                             else:
                                 print("get GA changes")
                             # Find a clickable link in the page and click to move to the next page
-                            AADataExtraction.clickByXPATH(input_link, implementation_details, data_layer_name)
+                            AADataExtraction.clickByXPATH(input_link, AADataExtraction.implementation_details, data_layer_name)
                         except Exception as ex:
                             print(f'Exception = {ex}')
                             driver.quit
@@ -292,29 +291,41 @@ class AADataExtraction:
             # write dataframe to excel and name the sheet name as pagename
 
             pageName = driver.execute_script("return document.title")
+            hostName = driver.execute_script("return document.location.hostname")
             pageName = re.sub(r'[/?*\[\]:]', '_', pageName)
+
+            hostName = str(hostName).replace(".","")
 
             df1 = pd.DataFrame(dataUnavailableUrls)
             df2 = pd.DataFrame({"No. of Pages": len(pagesCrawled)}, index=[0])
             df3 = pd.DataFrame(pagesCrawled)
-
-            with pd.ExcelWriter("./Output.xlsx", mode="a", engine="openpyxl", if_sheet_exists='replace') as writer:
-                result.to_excel(writer, sheet_name=pageName)
-                df3.to_excel(writer, sheet_name='URLs')
-                # df2.to_excel(writer, sheet_name='pages crawled')
-                df1.to_excel(writer, sheet_name='dataUnavailableUrls')
-                # writer.close()
+            excel_exist = os.path.exists("./" + hostName + AADataExtraction.implementation_details + "Output.xlsx")
+            if excel_exist:
+                with pd.ExcelWriter("./" + hostName + AADataExtraction.implementation_details + "Output.xlsx", mode="a", engine="openpyxl", if_sheet_exists='replace') as writer:
+                    result.to_excel(writer, sheet_name=pageName)
+                    df3.to_excel(writer, sheet_name='URLs')
+                    # df2.to_excel(writer, sheet_name='pages crawled')
+                    df1.to_excel(writer, sheet_name='dataUnavailableUrls')
+                    # writer.close()
+            else:
+                prod.to_excel("./" + hostName + AADataExtraction.implementation_details + "Output.xlsx", sheet_name=pageName)
+                with pd.ExcelWriter("./"+hostName + AADataExtraction.implementation_details + "Output.xlsx", mode="a", engine="openpyxl", if_sheet_exists='replace') as writer:
+                    df3.to_excel(writer, sheet_name='URLs')
+                    # df2.to_excel(writer, sheet_name='pages crawled')
+                    df1.to_excel(writer, sheet_name='dataUnavailableUrls')
         except Exception as ex:
+            hostName = driver.execute_script("return document.location.hostname")
+            hostName = str(hostName).replace(".","")
             print(f'Exception = {ex}')
             pageName = driver.execute_script("return document.title")
             pageName = re.sub(r'[/?*\[\]:]', '_', pageName)
             excel_exist = os.path.exists('./Output.xlsx')
             if excel_exist:
-                with pd.ExcelWriter("Output.xlsx", mode="a", engine="openpyxl", if_sheet_exists='replace') as writer:
+                with pd.ExcelWriter("./" + hostName + AADataExtraction.implementation_details + "Output.xlsx", mode="a", engine="openpyxl", if_sheet_exists='replace') as writer:
                     prod.to_excel(writer, sheet_name=pageName)
                     # writer.close()
             else:
-                prod.to_excel("Output.xlsx", sheet_name=pageName)
+                prod.to_excel("./" + hostName + AADataExtraction.implementation_details + "Output.xlsx", sheet_name=pageName)
                 pass
         finally:
             pass
