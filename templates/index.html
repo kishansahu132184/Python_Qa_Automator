@@ -10,6 +10,13 @@
 
 <body>
     <h1>Selenium Web Renderer</h1>
+    <!-- Display the warning message -->
+    {% if warning_message %}
+    <div class="alert alert-warning">
+        {{ warning_message }}
+    </div>
+    {% endif %}
+
     <form action="/render" method="POST">
         <label for="url">URL:</label>
         <input type="text" name="url" id="url" required><br><br>

@@ -1,17 +1,19 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import pandas as pd
 import DataExtractionFromDataLayer as dataExtractor
 from urllib.parse import urlparse, parse_qs
 import re
 import json
 import os
-import datetime
+from datetime import datetime
 import validators
 from validators import ValidationError
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, flash
 import time
+import requests
 
 # defining global variables
 aa_vars_list = []
@@ -30,24 +32,7 @@ chrome_options.add_argument('--disable-popup-blocking')
 # chrome_options.add_argument('--headless')
 chrome_options.set_capability("goog:loggingPrefs", {"performance": "ALL", "browser": "ALL"})
 chrome_driver_path = "./chromedriver"
- 
-# Adding argument to disable the AutomationControlled flag 
-chrome_options.add_argument("--disable-blink-features=AutomationControlled") 
- 
-# Exclude the collection of enable-automation switches 
-chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"]) 
- 
-# Turn-off userAutomationExtension 
-chrome_options.add_experimental_option("useAutomationExtension", False) 
- 
-
-
-chrome_service = webdriver.chrome.service.Service(chrome_driver_path)
-
-# driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
-driver = webdriver.Chrome(options=chrome_options)
-# Changing the property of the navigator value for webdriver to undefined 
-driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})") 
+driver = webdriver.Chrome(options=chrome_options) 
 
 class WaitForBSSToAppear(object):
     def __init__(self):
@@ -71,6 +56,7 @@ class AADataExtraction:
     currentURL = ""
     implementation_details = ""
     timestamp = ""
+    is_onetrust_enabled = False
 
     @app.route('/')
     def index():
@@ -89,21 +75,37 @@ class AADataExtraction:
         timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
         AADataExtraction.timestamp =timestamp_str
 
-
         if url != "":
+            error = None
             try:
                 req = validators.url(url)
+                while req != True:
+                    warning_message = "Please Enter your URl to proceed!"
+                    return render_template('index.html', warning_message=warning_message)
             except ValidationError as ex:
                 print(f'Something went wrong: {ex}')
                 print('Try again!')
-                # tkmb.showinfo(title="URL Validation",message="URL is correct")
+                error = 'Something went wrong: {ex}'
             if req:
                 if AADataExtraction.implementation_details == "AA" or AADataExtraction.implementation_details == "GA" or AADataExtraction.implementation_details == "AEP":
                     if data_layer_name != "":
+                        success_message= "Successfully started the extraction"
+                        # render_template('index.html', warning_message=success_message)
+                        AADataExtraction.dataLayerName = data_layer_name
                         print("\nImplementation Details : ", AADataExtraction.implementation_details, "\n")
                         driver.get(url)
                         input_link = driver.current_url
+                        AADataExtraction.is_onetrust_enabled = AADataExtraction.check_onetrust_presence(url)
                         try:
+                            if AADataExtraction.is_onetrust_enabled:
+                                # Wait for the cookie consent banner to appear (adjust the locator accordingly)
+                                cookie_banner = WebDriverWait(driver, 10).until(
+                                    EC.presence_of_element_located((By.ID, "onetrust-banner-sdk"))
+                                )
+                                # Click the button to accept cookies (adjust the locator accordingly)
+                                accept_button = cookie_banner.find_element(By.XPATH, "//button[contains(text(), 'Accept')]")
+                                accept_button.click()
+                            clickedItems.append(driver.current_url)
                             if AADataExtraction.implementation_details == "AA":
                                 AADataExtraction.fetchAANetworkElements(input_link, AADataExtraction.pagesVisited)
                             elif AADataExtraction.implementation_details == "AEP":
@@ -113,22 +115,48 @@ class AADataExtraction:
                             else:
                                 print("get GA changes")
                             # Find a clickable link in the page and click to move to the next page
-                            AADataExtraction.clickByXPATH(input_link, AADataExtraction.implementation_details, data_layer_name)
+                            AADataExtraction.clickByXPATH(input_link, AADataExtraction.implementation_details)
                         except Exception as ex:
                             print(f'Exception = {ex}')
                             driver.quit
                     else:
                         print('Please Enter your Datalayer to proceed')
+                        warning_message = "Please Enter your Datalayer to proceed!"
+                        return render_template('index.html', warning_message=warning_message)
                 else:
+                    # flash('', 'error')
                     print('Please Enter your Implementation Details in correcct format either AA or GA or AEP')
+                    warning_message = "Please Enter your Implementation Details in correcct format either AA or GA or AEP!"
+                    return render_template('index.html', warning_message=warning_message)
             else:
+                # flash('Please Enter the correct URl to proceed', 'error')
                 print('Please Enter the correct URl to proceed')
+                warning_message = "Please Enter the correct URl to proceed!"
+                return render_template('index.html', warning_message=warning_message)
         else:
+            # flash('Please Enter your URl to proceed', 'error')
             print('Please Enter your URl to proceed')
-
-            # input_url =
+            warning_message = "Please Enter the correct URl to proceed!"
+            return render_template('index.html', warning_message=warning_message)
 
         return True
+    
+   
+        
+
+    
+    def check_onetrust_presence(url):
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+
+            # Check if the OneTrust script URL is present in the page source
+            onetrust_script_url = "https://cdn.cookielaw.org/consent/"  # Replace with the actual script URL
+            return onetrust_script_url in response.text
+        except requests.exceptions.RequestException as e:
+            print(f"Error: {e}")
+            return False
+
 
     def fetchAANetworkElements(input_link, pagesCrawled):
         # taken only pageload call using adobeDatalayer[0]
@@ -205,12 +233,35 @@ class AADataExtraction:
         # if adobeDataLayer == "Datalayer doesn't persist":
         #     dataUnavailableUrls.append(driver.current_url)
         #     print(dataUnavailableUrls)
-        pagesCrawled.append(driver.current_url)
+        
+        log_entries = driver.get_log("performance")
+        for log_entry in log_entries:
+            data_dict = json.loads(log_entry["message"])
+            try:
+                if "analytics.google.com/g/collect?v=2" in str(data_dict['message']['params']['response']['url']):
+                    print(data_dict['message']['params']['response']['url'])
+                    request_url = data_dict['message']['params']['response']['url']
+                    parsed_url = urlparse(request_url)
+                    # Get the query string parameters as a dictionary
+                    query_params = parse_qs(parsed_url.query)
+                    # Convert the dictionary to a Pandas DataFrame
+                    df = pd.DataFrame(query_params)
+                    # Print the DataFrame
+                    # print(df)
+                    melted_df = pd.melt(df)
+                    # # Display the melted DataFrame
+                    # print(melted_df)
+                    AADataExtraction.printComparisionResult(
+                        melted_df, input_link, pagesCrawled, dataUnavailableUrls, isHomePagePassed)
+                    pagesCrawled.append(driver.current_url)
+            except:
+                continue
+                    
         network_requests = driver.execute_script(
             "return window.performance.getEntries();")
         for request in network_requests:
             request_url = request['name']
-            if "https://analytics.google.com/g/collect?v=2" in request_url:
+            if "analytics.google.com/g/collect?v=2" in request_url and driver.current_url not in pagesCrawled:
                 parsed_url = urlparse(request_url)
                 # Get the query string parameters as a dictionary
                 query_params = parse_qs(parsed_url.query)
@@ -226,7 +277,7 @@ class AADataExtraction:
 
                 # Move to next page with Clickable URL finder by using xPath
 
-    def clickByXPATH(input_link, implementationDetails, dataLayer):
+    def clickByXPATH(input_link, implementationDetails):
         # We also have to add a filter if the clickable url is internal or external
         elements = driver.find_elements(By.TAG_NAME, "a")
         if (len(elements) == 0):
@@ -308,9 +359,13 @@ class AADataExtraction:
 
         try:
             dataLayerJSON = json.dumps(driver.execute_script(f"return {AADataExtraction.dataLayerName}"))
-            dataLayer_new = json.loads(dataLayerJSON)
-            # print(dataLayer_new)
-            dataLayer_dl_df = pd.DataFrame(pd.json_normalize(dataLayer_new))
+            # if "[" in dataLayerJSON or "]" in dataLayerJSON:
+            #     replace_dict = {"[": "{", "]": "}"}
+            #     dataLayerJSON = "".join([replace_dict.get(c, c) for c in dataLayerJSON])
+            # dataLayer_new = json.loads(dataLayerJSON)
+            # # print(dataLayer_new)
+            dataLayer_dl_df = pd.read_json(dataLayerJSON)
+
             melted_dl_df = pd.melt(dataLayer_dl_df)
             # print(melted_dl_df)
 
