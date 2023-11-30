@@ -90,7 +90,7 @@ class AADataExtraction:
                 if AADataExtraction.implementation_details == "AA" or AADataExtraction.implementation_details == "GA" or AADataExtraction.implementation_details == "AEP":
                     if data_layer_name != "":
                         success_message= "Successfully started the extraction"
-                        # render_template('index.html', warning_message=success_message)
+                        render_template('index.html', warning_message=success_message)
                         AADataExtraction.dataLayerName = data_layer_name
                         print("\nImplementation Details : ", AADataExtraction.implementation_details, "\n")
                         driver.get(url)
