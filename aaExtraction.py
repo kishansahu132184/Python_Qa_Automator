@@ -1,3 +1,47 @@
+# # Code to check and install the libs
+# import subprocess
+# import sys
+# import importlib
+
+# # List of required libraries
+# required_libraries = ['customtkinter', 'numpy', 'selenium', 'pandas', 'urllib', 'openpyxl', 'Flask', 'requests']
+
+# # Function to install a library using pip
+# def install_library(library_name):
+#     subprocess.check_call([sys.executable, "-m", "pip", "install", library_name])
+
+# # Check if required libraries are installed and install them if missing
+# missing_libraries = []
+
+# for library in required_libraries:
+#     try:
+#         importlib.import_module(library)
+#     except ImportError:
+#         missing_libraries.append(library)
+
+# # Function to upgrade a library using pip
+# def upgrade_library(library_name):
+#     subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", library_name])
+#     # subprocess.check_call(['pip', 'install', '--upgrade', library_name])
+
+# # Check and upgrade required libraries
+# for library in required_libraries:
+#     try:
+#         upgrade_library(library)
+#         print(f"{library} has been upgraded.")
+#     except subprocess.CalledProcessError:
+#         print(f"Error upgrading {library}.")
+
+# print("All required libraries have been checked and upgraded if necessary.")
+
+# if missing_libraries:
+#     print("The following libraries are missing and will be installed:")
+#     for library in missing_libraries:
+#         print(library)
+#         install_library(library)
+#     print("All required libraries have been installed.")
+
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -140,10 +184,6 @@ class AADataExtraction:
             return render_template('index.html', warning_message=warning_message)
 
         return True
-    
-   
-        
-
     
     def check_onetrust_presence(url):
         try:
@@ -307,16 +347,69 @@ class AADataExtraction:
                     time.sleep(1)
                     driver.execute_script('window.scrollTo(750,1000)')
                     
+                    # Function to get all links
+                    def get_all_links():
+                        return driver.find_elements(By.TAG_NAME, "a")
+                    
+                    # Get initial list of links
+                    links = get_all_links()
+
+                    # Click on each link
+                    for index in range(len(links)):
+                        # Refresh the list of links
+                        links = get_all_links()
+                        
+                        # Wait for the link to be clickable
+                        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.TAG_NAME, 'a')))
+                        
+                        #store the current window
+                        original_window = driver.current_window_handle
+                        
+                        # Click on the link
+                        try:
+                            print(f"Clicking link {index+1}: {links[index].text}")
+                            links[index].click
+                            print("Clicked successfully!")
+                            
+                             # Wait for the new window or tab
+                            WebDriverWait(driver, 10).until(EC.new_window_is_opened)
+                            
+                            # Switch to the new window
+                            new_window = [window for window in driver.window_handles if window != original_window][0]
+                            driver.switch_to.window(new_window) 
+                            
+                            # Here you can perform any actions needed in the new window
+                            print(f"In new window/tab with title: {driver.title}")
+        
+                            # Close the new window if needed
+                            driver.close()
+                            
+                            # Switch back to the original window
+                            driver.switch_to.window(original_window)    
+                            
+                        except Exception as e:
+                            print(f"Failed to click link {index+1}: {e}")
+                            
+                         # Go back to the original page if not closed
+                        if driver.current_window_handle == original_window:
+                            driver.back()
+                        
+                        # Here you can perform any actions you need to do after clicking the button
+                        
+                        # Go back to the original page
+                        driver.back()
+                        
                     time.sleep(2)
                     clickedItems.append(driver.current_url)
                     driver.get(element)
                     driver.implicitly_wait(5)
-                    if implementationDetails == "AA":
-                        AADataExtraction.fetchAANetworkElements(input_link, AADataExtraction.pagesVisited)
-                    elif implementationDetails == "AEP":
-                        AADataExtraction.fetchAEPNetworkChanges(input_link, AADataExtraction.pagesVisited)
-                    elif implementationDetails == "GA":
-                        AADataExtraction.fetchGANetworkChanges(input_link, AADataExtraction.pagesVisited)
+                    
+                    # if implementationDetails == "AA":
+                    #     AADataExtraction.fetchAANetworkElements(input_link, AADataExtraction.pagesVisited)
+                    # elif implementationDetails == "AEP":
+                    #     AADataExtraction.fetchAEPNetworkChanges(input_link, AADataExtraction.pagesVisited)
+                    # elif implementationDetails == "GA":
+                    #     AADataExtraction.fetchGANetworkChanges(input_link, AADataExtraction.pagesVisited)
                 else:
                     continue
             except Exception:
@@ -350,6 +443,16 @@ class AADataExtraction:
                     pass
                 else:
                     break
+                
+    
+    def replace_special_characters_with_underscores(string):
+        # Define a regular expression pattern to match special characters
+        pattern = re.compile(r'[^a-zA-Z0-9]')
+        
+        # Replace special characters with underscores
+        modified_string = re.sub(pattern, '_', string)
+        
+        return modified_string
 
     def printComparisionResult(dataFrame, input_link, pagesCrawled, dataUnavailableUrls, isHomePagePassed):
         prod = dataFrame
@@ -384,7 +487,8 @@ class AADataExtraction:
             df1 = pd.DataFrame(dataUnavailableUrls)
             df2 = pd.DataFrame({"No. of Pages": len(pagesCrawled)}, index=[0])
             df3 = pd.DataFrame(pagesCrawled)
-            fileName = "./Digital_Analytics_QA_Results_" + hostName + "_" + AADataExtraction.implementation_details + "_output_" + AADataExtraction.timestamp + ".xlsx"
+            fileName = "./Digital_Analytics_QA_Results_" + hostName + "_" + AADataExtraction.implementation_details + "_output_" + AADataExtraction.timestamp 
+            fileName = AADataExtraction.replace_special_characters_with_underscores(fileName) + ".xlsx"
             excel_exist = os.path.exists(fileName)
             if excel_exist:
                 with pd.ExcelWriter(fileName, mode="a", engine="openpyxl", if_sheet_exists='replace') as writer:
@@ -394,7 +498,8 @@ class AADataExtraction:
                     df1.to_excel(writer, sheet_name='dataUnavailableUrls')
                     # writer.close()
             else:
-                prod.to_excel(fileName, sheet_name=pageName)
+                
+                prod.to_excel(fileName, sheet_name=pageName, index=False)
                 with pd.ExcelWriter(fileName, mode="a", engine="openpyxl", if_sheet_exists='replace') as writer:
                     df3.to_excel(writer, sheet_name='URLs')
                     # df2.to_excel(writer, sheet_name='pages crawled')
